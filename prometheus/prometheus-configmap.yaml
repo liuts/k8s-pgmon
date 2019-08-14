@@ -386,20 +386,7 @@ data:
         target_label: job
         replacement: $1
         action: replace
-    - job_name: k8s-pgmon/external-etcd
-      scrape_interval: 30s
-      scrape_timeout: 10s
-      metrics_path: /metrics
-      scheme: https
-      static_configs:
-      - targets:
-        - 10.10.96.115:2379
-        labels:
-          group: etcd
-      tls_config:
-        cert_file: /opt/etcd/crt/server.pem
-        key_file: /opt/etcd/key/server-key.pem
-        insecure_skip_verify: true
+
     - job_name: k8s-pgmon/kubernetes-nodes-kubelet
       scrape_interval: 30s
       scrape_timeout: 10s
