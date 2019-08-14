@@ -12,74 +12,113 @@ data:
       external_labels:
         prometheus: k8s-pgmon/k8s
         prometheus_replica: prometheus-k8s-0
-    rule_files:
-      - /etc/prometheus/rules/*.yaml
     alerting:
       alertmanagers:
-      - scheme: http
-        static_configs:
+      - static_configs:
         - targets:
-          - "k8s-pgmon-alertmanager:9093"
-
+          - k8s-pgmon-alertmanager:9093
+        scheme: http
+        timeout: 10s
+    rule_files:
+    - /etc/prometheus/rules/*.yaml
     scrape_configs:
     - job_name: k8s-pgmon/prometheus
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: http
       static_configs:
       - targets:
-        - "localhost:9090"
+        - localhost:9090
     - job_name: k8s-pgmon/alertmanager
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: http
       static_configs:
       - targets:
-        - "k8s-pgmon-alertmanager:9093"
-
-    - job_name: 'k8s-pgmon/kubernetes-cadvisor'
+        - k8s-pgmon-alertmanager:9093
+    - job_name: k8s-pgmon/kubernetes-cadvisor
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: https
       kubernetes_sd_configs:
       - role: node
-      scheme: https
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        insecure_skip_verify: false
       relabel_configs:
-      - action: labelmap
+      - separator: ;
         regex: __meta_kubernetes_node_label_(.+)
-      - target_label: __address__
+        replacement: $1
+        action: labelmap
+      - separator: ;
+        regex: (.*)
+        target_label: __address__
         replacement: kubernetes.default.svc:443
+        action: replace
       - source_labels: [__meta_kubernetes_node_name]
+        separator: ;
         regex: (.+)
         target_label: __metrics_path__
         replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
-
-
-    - job_name: 'k8s-pgmon/kubernetes-node-exporter'
-      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        action: replace
+    - job_name: k8s-pgmon/kubernetes-node-exporter
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: http
       kubernetes_sd_configs:
       - role: node
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
       relabel_configs:
-      - action: labelmap
+      - separator: ;
         regex: __meta_kubernetes_node_label_(.+)
+        replacement: $1
+        action: labelmap
       - source_labels: [__address__]
-        regex: '(.*):10250'
-        replacement: '${1}:9100'
+        separator: ;
+        regex: (.*):10250
         target_label: __address__
-
-    - job_name: 'k8s-pgmon/kubernetes-pods'
+        replacement: ${1}:9100
+        action: replace
+    - job_name: k8s-pgmon/kubernetes-pods
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: http
       kubernetes_sd_configs:
       - role: pod
       relabel_configs:
       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        separator: ;
+        regex: "true"
+        replacement: $1
         action: keep
-        regex: true
       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
-        action: replace
-        target_label: __metrics_path__
+        separator: ;
         regex: (.+)
-      - action: labelmap
+        target_label: __metrics_path__
+        replacement: $1
+        action: replace
+      - separator: ;
         regex: __meta_kubernetes_pod_label_(.+)
+        replacement: $1
+        action: labelmap
       - source_labels: [__meta_kubernetes_namespace]
-        action: replace
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_namespace
-      - source_labels: [__meta_kubernetes_pod_name]
+        replacement: $1
         action: replace
+      - source_labels: [__meta_kubernetes_pod_name]
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_pod_name
+        replacement: $1
+        action: replace
       - source_labels: [__meta_kubernetes_pod_ip]
         separator: ;
         regex: (.*)
@@ -104,91 +143,158 @@ data:
         target_label: __address__
         replacement: $1
         action: replace
-
-    - job_name: 'k8s-pgmon/kubernetes-ingresses'
+    - job_name: k8s-pgmon/kubernetes-ingresses
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: http
       kubernetes_sd_configs:
       - role: ingress
       relabel_configs:
       - source_labels: [__meta_kubernetes_ingress_annotation_prometheus_io_probe]
+        separator: ;
+        regex: "true"
+        replacement: $1
         action: keep
-        regex: true
-      - source_labels: [__meta_kubernetes_ingress_scheme,__address__,__meta_kubernetes_ingress_path]
+      - source_labels: [__meta_kubernetes_ingress_scheme, __address__, __meta_kubernetes_ingress_path]
+        separator: ;
         regex: (.+);(.+);(.+)
-        replacement: ${1}://${2}${3}
         target_label: __param_target
-      - target_label: __address__
+        replacement: ${1}://${2}${3}
+        action: replace
+      - separator: ;
+        regex: (.*)
+        target_label: __address__
         replacement: blackbox-exporter.example.com:9115
+        action: replace
       - source_labels: [__param_target]
+        separator: ;
+        regex: (.*)
         target_label: instance
-      - action: labelmap
+        replacement: $1
+        action: replace
+      - separator: ;
         regex: __meta_kubernetes_ingress_label_(.+)
+        replacement: $1
+        action: labelmap
       - source_labels: [__meta_kubernetes_namespace]
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_namespace
+        replacement: $1
+        action: replace
       - source_labels: [__meta_kubernetes_ingress_name]
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_name
-
-    - job_name: 'k8s-pgmon/kubernetes-services'
+        replacement: $1
+        action: replace
+    - job_name: k8s-pgmon/kubernetes-services
+      params:
+        module:
+        - http_2xx
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /probe
+      scheme: http
       kubernetes_sd_configs:
       - role: service
-      metrics_path: /probe
-      params:
-        module: [http_2xx]
       relabel_configs:
       - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_probe]
+        separator: ;
+        regex: "true"
+        replacement: $1
         action: keep
-        regex: true
       - source_labels: [__address__]
+        separator: ;
+        regex: (.*)
         target_label: __param_target
-      - target_label: __address__
+        replacement: $1
+        action: replace
+      - separator: ;
+        regex: (.*)
+        target_label: __address__
         replacement: blackbox-exporter.example.com:9115
+        action: replace
       - source_labels: [__param_target]
+        separator: ;
+        regex: (.*)
         target_label: instance
-      - action: labelmap
+        replacement: $1
+        action: replace
+      - separator: ;
         regex: __meta_kubernetes_service_label_(.+)
+        replacement: $1
+        action: labelmap
       - source_labels: [__meta_kubernetes_namespace]
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_namespace
+        replacement: $1
+        action: replace
       - source_labels: [__meta_kubernetes_service_name]
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_name
-
-    - job_name: 'k8s-pgmon/kubernetes-service-endpoints'
+        replacement: $1
+        action: replace
+    - job_name: k8s-pgmon/kubernetes-service-endpoints
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: http
       kubernetes_sd_configs:
       - role: endpoints
       relabel_configs:
       - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+        separator: ;
+        regex: "true"
+        replacement: $1
         action: keep
-        regex: true
       - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
-        action: replace
-        target_label: __scheme__
+        separator: ;
         regex: (https?)
+        target_label: __scheme__
+        replacement: $1
+        action: replace
       - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
-        action: replace
-        target_label: __metrics_path__
+        separator: ;
         regex: (.+)
+        target_label: __metrics_path__
+        replacement: $1
+        action: replace
       - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
-        action: replace
-        target_label: __address__
+        separator: ;
         regex: ([^:]+)(?::\d+)?;(\d+)
+        target_label: __address__
         replacement: $1:$2
-      - action: labelmap
+        action: replace
+      - separator: ;
         regex: __meta_kubernetes_service_label_(.+)
+        replacement: $1
+        action: labelmap
       - source_labels: [__meta_kubernetes_namespace]
-        action: replace
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_namespace
-      - source_labels: [__meta_kubernetes_service_name]
+        replacement: $1
         action: replace
+      - source_labels: [__meta_kubernetes_service_name]
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_name
+        replacement: $1
+        action: replace
       - source_labels: [__meta_kubernetes_pod_label_k8s_app]
         separator: ;
         regex: (.*)
         target_label: job
         replacement: $1
         action: replace
-
     - job_name: k8s-pgmon/kube-system/kube-scheduler
       scrape_interval: 30s
       scrape_timeout: 10s
-      metrics_path: /metrics
+      metrics_path: /ks/metrics
       scheme: http
       kubernetes_sd_configs:
       - role: endpoints
@@ -253,97 +359,112 @@ data:
         target_label: endpoint
         replacement: http-metrics
         action: replace
-
-
     - job_name: k8s-pgmon/kube-system/kube-apiservers
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: https
       kubernetes_sd_configs:
       - role: endpoints
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        insecure_skip_verify: true
       relabel_configs:
-      - action: keep
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        separator: ;
         regex: default;kubernetes;https
-        source_labels:
-        - __meta_kubernetes_namespace
-        - __meta_kubernetes_service_name
-        - __meta_kubernetes_endpoint_port_name
-      - action: labelmap
+        replacement: $1
+        action: keep
+      - separator: ;
         regex: __meta_kubernetes_service_label_(.+)
+        replacement: $1
+        action: labelmap
       - source_labels: [__meta_kubernetes_service_label_component]
         separator: ;
         regex: (.*)
         target_label: job
         replacement: $1
         action: replace
-      scheme: https
-      tls_config:
-        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-        insecure_skip_verify: true
-      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-
-    - job_name: 'k8s-pgmon/external-etcd'
+    - job_name: k8s-pgmon/external-etcd
       scrape_interval: 30s
       scrape_timeout: 10s
       metrics_path: /metrics
       scheme: https
-      tls_config:
-       insecure_skip_verify: true
-       cert_file: /opt/etcd/crt/server.pem
-       key_file: /opt/etcd/key/server-key.pem
       static_configs:
       - targets:
-        - '172.25.50.16:2379'
-        - '172.25.50.17:2379'
-        - '172.25.50.18:2379'
+        - 10.10.96.115:2379
         labels:
-          group: 'etcd'
-
-    - job_name: 'k8s-pgmon/kubernetes-nodes-kubelet'
-      scheme: https
+          group: etcd
       tls_config:
-        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        cert_file: /opt/etcd/crt/server.pem
+        key_file: /opt/etcd/key/server-key.pem
+        insecure_skip_verify: true
+    - job_name: k8s-pgmon/kubernetes-nodes-kubelet
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: https
       kubernetes_sd_configs:
       - role: node
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        insecure_skip_verify: false
       relabel_configs:
-      - action: labelmap
+      - separator: ;
         regex: __meta_kubernetes_node_label_(.+)
-      - target_label: __address__
+        replacement: $1
+        action: labelmap
+      - separator: ;
+        regex: (.*)
+        target_label: __address__
         replacement: kubernetes.default.svc:443
+        action: replace
       - source_labels: [__meta_kubernetes_node_name]
+        separator: ;
         regex: (.+)
         target_label: __metrics_path__
         replacement: /api/v1/nodes/${1}/proxy/metrics
-
-    - job_name: 'kubernetes-JVM-pods'
+        action: replace
+    - job_name: kubernetes-JVM-pods
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: http
       kubernetes_sd_configs:
       - role: pod
       relabel_configs:
-      # Example relabel to scrape only pods that have
-      # "example.io/should_be_scraped = true" annotation.
       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_should_be_scraped]
+        separator: ;
+        regex: "true"
+        replacement: $1
         action: keep
-        regex: true
-      #
-      # Example relabel to customize metric path based on pod
-      # "example.io/metric_path = <metric path>" annotation.
       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_metric_path]
-        action: replace
-        target_label: __metrics_path__
+        separator: ;
         regex: (.+)
-      #
-      # Example relabel to scrape only single, desired port for the pod
-      # based on pod "example.io/scrape_port = <port>" annotation.
-      # Note that __address__ is modified here, so if pod containers' ports
-      # are declared, they all will be ignored.
+        target_label: __metrics_path__
+        replacement: $1
+        action: replace
       - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_scrape_port]
-        action: replace
+        separator: ;
         regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: $1:$2
         target_label: __address__
-      - action: labelmap
+        replacement: $1:$2
+        action: replace
+      - separator: ;
         regex: __meta_kubernetes_pod_label_(.+)
+        replacement: $1
+        action: labelmap
       - source_labels: [__meta_kubernetes_namespace]
-        action: replace
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_namespace
-      - source_labels: [__meta_kubernetes_pod_name]
+        replacement: $1
         action: replace
+      - source_labels: [__meta_kubernetes_pod_name]
+        separator: ;
+        regex: (.*)
         target_label: kubernetes_pod_name
+        replacement: $1
+        action: replace
