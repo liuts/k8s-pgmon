@@ -468,3 +468,30 @@ data:
         target_label: kubernetes_pod_name
         replacement: $1
         action: replace
+
+    - job_name: k8s-pgmon/kubernetes-etcd
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: https
+      kubernetes_sd_configs:
+      - role: node
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tls_config:
+        cert_file: /opt/etcd/crt/server.pem
+        key_file: /opt/etcd/key/server-key.pem
+        insecure_skip_verify: true
+      relabel_configs:
+      - separator: ;
+        regex: __meta_kubernetes_node_label_(.+)
+        replacement: $1
+        action: labelmap
+      - source_labels: [__meta_kubernetes_node_label_kubernetes_io_role]
+        regex: node
+        action: drop
+      - source_labels: [__address__]
+        separator: ;
+        regex: (.*):10250
+        target_label: __address__
+        replacement: ${1}:2379
+        action: replace
